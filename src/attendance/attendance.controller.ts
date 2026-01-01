@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
+import { SearchAttendanceDto } from './dto/search-attendance.dto';
 
 @Controller('api/attendance')
 export class AttendanceController {
@@ -12,7 +13,7 @@ export class AttendanceController {
   }
 
   @Get()
-  findAll() {
-    return this.attendanceService.findAll();
+  findAll(@Query() query: SearchAttendanceDto) {
+    return this.attendanceService.findAll(query);
   }
 }

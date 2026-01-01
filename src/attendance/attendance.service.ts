@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Attendance } from './schema/attendance.schema';
 import { UsersService } from 'src/users/users.service';
 import { AttendanceGateway } from './attendance.gateway';
+import { SearchAttendanceDto } from './dto/search-attendance.dto';
 
 @Injectable()
 export class AttendanceService {
@@ -26,8 +27,34 @@ export class AttendanceService {
     this.gateway.emitAttendance(record);
     return this.model.create(record);
   }
-  async findAll() {
-    return this.model.aggregate([
+  // async findAll() {
+  //   return this.model.aggregate([
+  //     {
+  //       $lookup: {
+  //         from: 'users',
+  //         localField: 'userCode',
+  //         foreignField: 'userCode',
+  //         as: 'user',
+  //       },
+  //     },
+  //     {
+  //       $unwind: {
+  //         path: '$user',
+  //         preserveNullAndEmptyArrays: true,
+  //       },
+  //     },
+  //   ]);
+  // }
+
+  // attendance.service.ts
+  async findAll(query: SearchAttendanceDto) {
+    const { userName, page = '1', limit = '10' } = query;
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const pipeline: any[] = [
       {
         $lookup: {
           from: 'users',
@@ -42,6 +69,42 @@ export class AttendanceService {
           preserveNullAndEmptyArrays: true,
         },
       },
+    ];
+
+    // 🔍 search theo tên user
+    if (typeof userName === 'string' && userName.trim() !== '') {
+      pipeline.push({
+        $match: {
+          'user.name': { $regex: userName.trim(), $options: 'i' },
+        },
+      });
+    }
+
+    // 📊 sort
+    pipeline.push({ $sort: { time: -1 } });
+
+    // 📄 pagination
+    pipeline.push({ $skip: skip }, { $limit: limitNum });
+
+    // 🚀 chạy query + count
+    const [data, total] = await Promise.all([
+      this.model.aggregate(pipeline),
+      this.model.aggregate([
+        ...pipeline.filter(
+          (stage) => !('$skip' in stage) && !('$limit' in stage),
+        ),
+        { $count: 'total' },
+      ]),
     ]);
+
+    return {
+      data,
+      pagination: {
+        total: total[0]?.total || 0,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil((total[0]?.total || 0) / limitNum),
+      },
+    };
   }
 }
